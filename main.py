@@ -1,8 +1,12 @@
 import imp
 from multiprocessing.dummy import JoinableQueue
+from pyexpat import model
+from statistics import mode
+import joblib
 import pandas as pd
 import numpy as np
 import argparse
+from xgboost import XGBRegressor
 from datetime import datetime, timedelta
 # You should not modify this part.
 def config():
@@ -23,26 +27,89 @@ def output(path, data):
 
     return
 
+def to_supervised(data, n_in=1, n_out=1, var=''):
+    df = pd.DataFrame(data)
+    cols, names = list(), list()
+    for i in range(n_in, 0, -1):
+        cols.append(df[var].shift(i))
+        names += [('var(t-%d)' % (i))]
+
+    for i in range(0, n_out):
+        cols.append(df[var].shift(-i))
+        if i == 0:
+            names += [('var(t)')]
+        else:
+            names += [('var(t+%d)' % (i))]
+
+    agg = pd.concat(cols, axis=1)
+    agg.columns = names
+    # 刪除那些包含空值(NaN)的行
+    agg.dropna(inplace=True)
+    return agg
 
 if __name__ == "__main__":
+    
     args = config()
-    # tmpConFile = 'consumption.csv'
-    # tmpGenFile = 'generation.csv'
-
     custom_date_parser = lambda x: datetime.strptime(x, "%Y-%m-%d %H:%M:%S")
-    Condata = pd.read_csv(args.consumption, parse_dates=['time'], date_parser=custom_date_parser, index_col=0, squeeze=True)
-    Gendata = pd.read_csv(args.generation, parse_dates=['time'], date_parser=custom_date_parser, index_col=0, squeeze=True)
+    conData = pd.read_csv(args.consumption, parse_dates=['time'], date_parser=custom_date_parser, index_col=0, squeeze=True)
+    genData = pd.read_csv(args.generation, parse_dates=['time'], date_parser=custom_date_parser, index_col=0, squeeze=True)
+    # print(Condata)
+
+    # Predict Generation.
+    # 1. 把模型與scalar載入
+    scalar = joblib.load('genScalar.save') 
+    model = XGBRegressor()
+    model.load_model('./genModel/2022-05-17-01-15-model.h5')
+    
+    # 2. 把資料轉成model需求ㄉinput格式
+    genData = to_supervised(genData, n_in=23, n_out=1, var='generation')
+    genData = scalar.fit_transform(genData)
+    X = genData[0, :] # 測試看看準不準==
+    # X = genData[-1, :]
+    X = X.reshape(1, 24)  
+
+    # 3. 預測yo
+    genPredict = model.predict(X)
+    invGen = scalar.inverse_transform(genPredict)
+    invGen = invGen.reshape(24,)
+    roundGen = [round(num, 2) for num in invGen]
+    print('Generation: ')
+    print(roundGen)
+    print('--------------------------------------')
+
+    # Predict Consumption.
+    # 1. 把模型與scalar載入
+    scalar = joblib.load('conScalar.save') 
+    model.load_model('./conModel/2022-05-17-01-17-model.h5')
+    
+    # 2. 把資料轉成model需求ㄉinput格式
+    conData = to_supervised(conData, n_in=23, n_out=1, var='consumption')
+    conData = scalar.fit_transform(conData)
+    X = conData[0, :] # 測試看看準不準==
+    # X = conData[-1, :]
+    X = X.reshape(1, 24)  
+
+    # 3. 預測yo
+    conPredict = model.predict(X)
+    invCon = scalar.inverse_transform(conPredict)
+    invCon = invCon.reshape(24,)
+    roundCon = [round(num, 2) for num in invCon]
+    print('Consumption')
+    print(roundCon)
+    """
+    genData = scalar.fit_transform(genData)
+    print(Train.iloc[0])
+    yhat = model.predict(Train.iloc[0])
+    print(yhat.shape)
+
+    
+    
     data = []
     time = Condata.index
-    print(time[-1] + timedelta(hours=1))
     NextTime = time[-1] + timedelta(hours=1)
-    if Gendata[-1] < Condata[-1]:
-        # means need more electricuty
+    for i in range(1, 25, 1):
         data.append([NextTime.strftime('%Y-%m-%d %H:%M:%S'), "buy", 2.5, 3])
         data.append([NextTime.strftime('%Y-%m-%d %H:%M:%S'), "sell", 3, 3])
-    else:
-        data.append([NextTime.strftime('%Y-%m-%d %H:%M:%S'), "sell", 3, 5])
-        data.append([NextTime.strftime('%Y-%m-%d %H:%M:%S'), "buy", 2.36, 3])
-    test = Condata.index
-
+        NextTime += timedelta(hours=1)
     output(args.output, data)
+    """
