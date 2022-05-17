@@ -2,10 +2,12 @@ import imp
 from multiprocessing.dummy import JoinableQueue
 from pyexpat import model
 from statistics import mode
+from time import time
 import joblib
 import pandas as pd
 import numpy as np
 import argparse
+from pyparsing import condition_as_parse_action
 from xgboost import XGBRegressor
 from datetime import datetime, timedelta
 # You should not modify this part.
@@ -53,6 +55,7 @@ if __name__ == "__main__":
     custom_date_parser = lambda x: datetime.strptime(x, "%Y-%m-%d %H:%M:%S")
     conData = pd.read_csv(args.consumption, parse_dates=['time'], date_parser=custom_date_parser, index_col=0, squeeze=True)
     genData = pd.read_csv(args.generation, parse_dates=['time'], date_parser=custom_date_parser, index_col=0, squeeze=True)
+    time = conData.index
     # print(Condata)
 
     # Predict Generation.
@@ -72,10 +75,10 @@ if __name__ == "__main__":
     genPredict = model.predict(X)
     invGen = scalar.inverse_transform(genPredict)
     invGen = invGen.reshape(24,)
-    roundGen = [round(num, 2) for num in invGen]
-    print('Generation: ')
-    print(roundGen)
-    print('--------------------------------------')
+    # roundGen = [round(num, 2) for num in invGen]
+    # print('Generation: ')
+    # print(roundGen)
+    # print('--------------------------------------')
 
     # Predict Consumption.
     # 1. 把模型與scalar載入
@@ -93,23 +96,19 @@ if __name__ == "__main__":
     conPredict = model.predict(X)
     invCon = scalar.inverse_transform(conPredict)
     invCon = invCon.reshape(24,)
-    roundCon = [round(num, 2) for num in invCon]
-    print('Consumption')
-    print(roundCon)
-    """
-    genData = scalar.fit_transform(genData)
-    print(Train.iloc[0])
-    yhat = model.predict(Train.iloc[0])
-    print(yhat.shape)
-
+    # roundCon = [round(num, 2) for num in invCon]
+    # print('Consumption')
+    # print(roundCon)
     
-    
+    # 輸出預測結果
     data = []
-    time = Condata.index
     NextTime = time[-1] + timedelta(hours=1)
     for i in range(1, 25, 1):
-        data.append([NextTime.strftime('%Y-%m-%d %H:%M:%S'), "buy", 2.5, 3])
-        data.append([NextTime.strftime('%Y-%m-%d %H:%M:%S'), "sell", 3, 3])
+        bias = invCon[i-1]-invGen[i-1]
+        if bias >= 0:   # 需要買電
+            data.append([NextTime.strftime('%Y-%m-%d %H:%M:%S'), "buy", 2.5, round(bias, 2)])
+        else:   # 有多的電ㄛ
+            data.append([NextTime.strftime('%Y-%m-%d %H:%M:%S'), "sell", 3, round(-bias, 2)])
         NextTime += timedelta(hours=1)
-    output(args.output, data)
-    """
+    output(args.output, data)   
+    
