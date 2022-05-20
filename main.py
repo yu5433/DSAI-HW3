@@ -62,7 +62,7 @@ if __name__ == "__main__":
     # 1. 把模型與scalar載入
     scalar = joblib.load('genScalar.save') 
     model = XGBRegressor()
-    model.load_model('./genModel/2022-05-17-01-15-model.h5')
+    model.load_model('genModel.h5')
     
     # 2. 把資料轉成model需求ㄉinput格式
     genData = to_supervised(genData, n_in=23, n_out=1, var='generation')
@@ -83,7 +83,7 @@ if __name__ == "__main__":
     # Predict Consumption.
     # 1. 把模型與scalar載入
     scalar = joblib.load('conScalar.save') 
-    model.load_model('./conModel/2022-05-17-01-17-model.h5')
+    model.load_model('conModel.h5')
     
     # 2. 把資料轉成model需求ㄉinput格式
     conData = to_supervised(conData, n_in=23, n_out=1, var='consumption')
@@ -108,7 +108,7 @@ if __name__ == "__main__":
         if bias >= 0:   # 需要買電
             data.append([NextTime.strftime('%Y-%m-%d %H:%M:%S'), "buy", 2.5, round(bias, 2)])
         else:   # 有多的電ㄛ
-            data.append([NextTime.strftime('%Y-%m-%d %H:%M:%S'), "sell", 3, round(-bias, 2)])
+            data.append([NextTime.strftime('%Y-%m-%d %H:%M:%S'), "sell", 2.8, round(-bias, 2)])
         NextTime += timedelta(hours=1)
     output(args.output, data)   
     
